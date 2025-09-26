@@ -20,14 +20,18 @@ import {
   Eye,
   DollarSign,
   Star,
-  RotateCcw
+  RotateCcw,
+  LogOut
 } from 'lucide-react';
 import axios from 'axios';
+import AdminLogin from './AdminLogin';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const API = `${API_BASE}/api`;
 
 const AdminDashboard = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminToken, setAdminToken] = useState(null);
   const [stats, setStats] = useState({
     products: { total: 0, available: 0 },
     orders: { total: 0, pending: 0 },
@@ -51,8 +55,39 @@ const AdminDashboard = () => {
   });
 
   useEffect(() => {
-    loadDashboardData();
+    // Check for stored admin token on component mount
+    const storedToken = localStorage.getItem('adminToken');
+    if (storedToken) {
+      setAdminToken(storedToken);
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadDashboardData();
+    }
+  }, [isAuthenticated]);
+
+  const handleLoginSuccess = (token) => {
+    setAdminToken(token);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    setAdminToken(null);
+    setIsAuthenticated(false);
+    // Clear all data
+    setStats({
+      products: { total: 0, available: 0 },
+      orders: { total: 0, pending: 0 },
+      reviews: { total: 0, approved: 0, pending: 0 }
+    });
+    setProducts([]);
+    setOrders([]);
+    setReviews([]);
+  };
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -269,6 +304,11 @@ const AdminDashboard = () => {
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
+  // Show login form if not authenticated
+  if (!isAuthenticated) {
+    return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -283,9 +323,15 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600">Manage your home bakery business</p>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+            <p className="text-gray-600">Manage your home bakery business</p>
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
         </div>
 
         {/* Stats Cards */}

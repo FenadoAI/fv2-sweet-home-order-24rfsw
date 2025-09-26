@@ -346,6 +346,92 @@ const HomePage = () => {
         <ReviewSection reviews={reviews} />
       </div>
 
+      {/* Footer */}
+      <footer className="bg-white border-t mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="md:col-span-2">
+              <div className="flex items-center mb-4">
+                <Heart className="h-8 w-8 text-rose-500 mr-3" />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Sweet Home Bakery</h3>
+                  <p className="text-sm text-gray-600">Handcrafted with love</p>
+                </div>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Creating delicious memories with fresh, locally-sourced ingredients and traditional baking techniques.
+                Every item is made to order with 24-48 hours notice for the freshest possible experience.
+              </p>
+              <div className="flex items-center text-gray-600">
+                <MapPin className="h-4 w-4 mr-2" />
+                <span>Local delivery available</span>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-4">Quick Links</h4>
+              <ul className="space-y-2 text-gray-600">
+                <li>
+                  <button
+                    onClick={() => document.getElementById('all-reviews').scrollIntoView({ behavior: 'smooth' })}
+                    className="hover:text-amber-600 transition-colors"
+                  >
+                    Customer Reviews
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    className="hover:text-amber-600 transition-colors"
+                  >
+                    Our Products
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setIsCartOpen(true)}
+                    className="hover:text-amber-600 transition-colors"
+                  >
+                    View Cart
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-4">Contact & Info</h4>
+              <ul className="space-y-2 text-gray-600">
+                <li>
+                  <span className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2" />
+                    24-48hr notice required
+                  </span>
+                </li>
+                <li>
+                  <span className="flex items-center">
+                    <Award className="h-4 w-4 mr-2" />
+                    100% organic ingredients
+                  </span>
+                </li>
+                <li>
+                  <a
+                    href="/admin"
+                    className="text-sm text-gray-500 hover:text-amber-600 transition-colors"
+                    title="Admin Panel"
+                  >
+                    Admin Panel
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t mt-8 pt-8 text-center text-gray-500">
+            <p>&copy; 2024 Sweet Home Bakery. Made with ❤️ for our community.</p>
+          </div>
+        </div>
+      </footer>
+
       {/* Cart Sidebar */}
       <Cart
         isOpen={isCartOpen}

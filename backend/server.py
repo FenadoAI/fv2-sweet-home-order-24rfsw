@@ -192,6 +192,16 @@ class ReviewUpdate(BaseModel):
     approved: bool
 
 
+# Admin authentication models
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class AdminLoginResponse(BaseModel):
+    success: bool
+    token: Optional[str] = None
+    message: str
+
 # AI agent models
 class ChatRequest(BaseModel):
     message: str
@@ -436,6 +446,25 @@ async def delete_review(review_id: str):
         mock_reviews.pop(review_index)
         return {"message": "Review deleted successfully"}
 
+
+# Admin authentication routes
+@api_router.post("/admin/login", response_model=AdminLoginResponse)
+async def admin_login(request: AdminLoginRequest):
+    # Simple hardcoded admin credentials as requested
+    if request.username == "admin" and request.password == "admin":
+        # Generate a simple token (in production this would be a proper JWT)
+        import secrets
+        token = secrets.token_urlsafe(32)
+        return AdminLoginResponse(
+            success=True,
+            token=token,
+            message="Login successful"
+        )
+    else:
+        return AdminLoginResponse(
+            success=False,
+            message="Invalid credentials"
+        )
 
 # Analytics routes
 @api_router.get("/analytics/dashboard")
