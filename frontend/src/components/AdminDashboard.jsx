@@ -18,19 +18,26 @@ import {
   Check,
   X,
   Eye,
-  DollarSign
+  DollarSign,
+  Star,
+  RotateCcw
 } from 'lucide-react';
+import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API = `${API_BASE}/api`;
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
-    products: { total: 6, available: 6 },
-    orders: { total: 12, pending: 3 },
-    reviews: { total: 5, approved: 5, pending: 0 }
+    products: { total: 0, available: 0 },
+    orders: { total: 0, pending: 0 },
+    reviews: { total: 0, approved: 0, pending: 0 }
   });
 
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -44,8 +51,42 @@ const AdminDashboard = () => {
   });
 
   useEffect(() => {
-    loadMockData();
+    loadDashboardData();
   }, []);
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Load analytics dashboard
+      const analyticsResponse = await axios.get(`${API}/analytics/dashboard`);
+      const dashboardData = analyticsResponse.data;
+
+      setStats({
+        products: dashboardData.products,
+        orders: dashboardData.orders,
+        reviews: dashboardData.reviews
+      });
+
+      // Load products
+      const productsResponse = await axios.get(`${API}/products?available_only=false`);
+      setProducts(productsResponse.data);
+
+      // Load orders
+      const ordersResponse = await axios.get(`${API}/orders`);
+      setOrders(ordersResponse.data);
+
+      // Load all reviews (approved and pending)
+      const reviewsResponse = await axios.get(`${API}/reviews?approved_only=false`);
+      setReviews(reviewsResponse.data);
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      // Fallback to mock data
+      loadMockData();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadMockData = () => {
     // Mock products
@@ -115,6 +156,11 @@ const AdminDashboard = () => {
     setProducts(mockProducts);
     setOrders(mockOrders);
     setReviews(mockReviews);
+    setStats({
+      products: { total: mockProducts.length, available: mockProducts.filter(p => p.available).length },
+      orders: { total: mockOrders.length, pending: mockOrders.filter(o => o.status === 'pending').length },
+      reviews: { total: mockReviews.length, approved: mockReviews.filter(r => r.approved).length, pending: mockReviews.filter(r => !r.approved).length }
+    });
   };
 
   const handleAddProduct = (e) => {
@@ -160,18 +206,54 @@ const AdminDashboard = () => {
     );
   };
 
-  const approveReview = (reviewId) => {
-    setReviews(prev =>
-      prev.map(review =>
-        review.id === reviewId
-          ? { ...review, approved: true }
-          : review
-      )
-    );
+  const approveReview = async (reviewId) => {
+    try {
+      await axios.put(`${API}/reviews/${reviewId}/approve`, { approved: true });
+      setReviews(prev =>
+        prev.map(review =>
+          review.id === reviewId
+            ? { ...review, approved: true }
+            : review
+        )
+      );
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        reviews: {
+          ...prev.reviews,
+          approved: prev.reviews.approved + 1,
+          pending: prev.reviews.pending - 1
+        }
+      }));
+    } catch (error) {
+      console.error('Error approving review:', error);
+      alert('Error approving review. Please try again.');
+    }
   };
 
-  const deleteReview = (reviewId) => {
-    setReviews(prev => prev.filter(review => review.id !== reviewId));
+  const deleteReview = async (reviewId) => {
+    if (!window.confirm('Are you sure you want to delete this review?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API}/reviews/${reviewId}`);
+      const deletedReview = reviews.find(r => r.id === reviewId);
+      setReviews(prev => prev.filter(review => review.id !== reviewId));
+
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        reviews: {
+          total: prev.reviews.total - 1,
+          approved: deletedReview?.approved ? prev.reviews.approved - 1 : prev.reviews.approved,
+          pending: !deletedReview?.approved ? prev.reviews.pending - 1 : prev.reviews.pending
+        }
+      }));
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      alert('Error deleting review. Please try again.');
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -186,6 +268,17 @@ const AdminDashboard = () => {
     const config = statusConfig[status] || statusConfig.pending;
     return <Badge className={config.color}>{config.text}</Badge>;
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-amber-600 mx-auto"></div>
+          <p className="mt-4 text-amber-800">Loading admin dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -432,60 +525,132 @@ const AdminDashboard = () => {
           {/* Reviews Tab */}
           <TabsContent value="reviews">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Review Management</CardTitle>
+                <Button
+                  variant="outline"
+                  onClick={() => loadDashboardData()}
+                  disabled={loading}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Rating</TableHead>
-                      <TableHead>Comment</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reviews.map((review) => (
-                      <TableRow key={review.id}>
-                        <TableCell className="font-medium">{review.customer_name}</TableCell>
-                        <TableCell>
-                          <div className="flex">
-                            {[...Array(review.rating)].map((_, i) => (
-                              <span key={i} className="text-yellow-400">⭐</span>
-                            ))}
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">No reviews found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <Card className="bg-green-50 border-green-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center">
+                            <Check className="h-5 w-5 text-green-600 mr-2" />
+                            <div>
+                              <p className="text-sm text-green-700">Approved</p>
+                              <p className="text-xl font-bold text-green-900">{stats.reviews.approved}</p>
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">{review.comment}</TableCell>
-                        <TableCell>
-                          <Badge className={review.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
-                            {review.approved ? 'Approved' : 'Pending'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            {!review.approved && (
-                              <Button
-                                size="sm"
-                                onClick={() => approveReview(review.id)}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => deleteReview(review.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-yellow-50 border-yellow-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center">
+                            <X className="h-5 w-5 text-yellow-600 mr-2" />
+                            <div>
+                              <p className="text-sm text-yellow-700">Pending</p>
+                              <p className="text-xl font-bold text-yellow-900">{stats.reviews.pending}</p>
+                            </div>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-blue-50 border-blue-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center">
+                            <MessageSquare className="h-5 w-5 text-blue-600 mr-2" />
+                            <div>
+                              <p className="text-sm text-blue-700">Total</p>
+                              <p className="text-xl font-bold text-blue-900">{stats.reviews.total}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Reviews Table */}
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Rating</TableHead>
+                          <TableHead>Comment</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reviews.map((review) => (
+                          <TableRow key={review.id} className={!review.approved ? 'bg-yellow-50' : ''}>
+                            <TableCell className="font-medium">{review.customer_name}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center">
+                                {[...Array(review.rating)].map((_, i) => (
+                                  <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                ))}
+                                <span className="ml-2 text-sm text-gray-600">({review.rating}/5)</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-sm">
+                              <div className="truncate" title={review.comment}>
+                                {review.comment.length > 50
+                                  ? `${review.comment.substring(0, 50)}...`
+                                  : review.comment
+                                }
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-500">
+                              {review.created_at ? new Date(review.created_at).toLocaleDateString() : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={review.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                                {review.approved ? 'Approved' : 'Pending'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                {!review.approved && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-green-600 hover:bg-green-700"
+                                    onClick={() => approveReview(review.id)}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteReview(review.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

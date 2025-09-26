@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, ShoppingCart, Clock, Award, Heart, MapPin } from 'lucide-react';
+import { Star, ShoppingCart, Clock, Award, Heart, MapPin, MessageCircle } from 'lucide-react';
 import ProductCard from './ProductCard';
 import Cart from './Cart';
 import ReviewSection from './ReviewSection';
@@ -112,7 +112,12 @@ const HomePage = () => {
 
   const fetchReviews = async () => {
     try {
-      // Mock reviews data
+      // Fetch approved reviews from backend API
+      const response = await axios.get(`${API}/reviews?approved_only=true`);
+      setReviews(response.data);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      // Fallback to mock data if API fails
       const mockReviews = [
         {
           id: "rev_001",
@@ -137,8 +142,6 @@ const HomePage = () => {
         }
       ];
       setReviews(mockReviews);
-    } catch (error) {
-      console.error('Error fetching reviews:', error);
     }
   };
 
@@ -248,6 +251,74 @@ const HomePage = () => {
         </div>
       </section>
 
+      {/* Featured Reviews - Prominent Display */}
+      {reviews.length > 0 && (
+        <section className="bg-gradient-to-br from-rose-50 to-pink-50 py-16 border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <div className="flex justify-center items-center mb-4">
+                <div className="flex items-center text-yellow-500">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-6 w-6 fill-current" />
+                  ))}
+                </div>
+                <span className="ml-3 text-2xl font-bold text-gray-900">5.0</span>
+              </div>
+              <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Loved by Our Customers
+              </h3>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Don't just take our word for it - here's what families are saying about our handcrafted treats
+              </p>
+            </div>
+
+            {/* Featured Reviews Carousel */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {reviews.slice(0, 6).map((review) => (
+                <Card key={review.id} className="bg-white shadow-lg hover:shadow-xl transition-all duration-300 border-0">
+                  <CardContent className="p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center">
+                        {[...Array(review.rating)].map((_, i) => (
+                          <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                        ))}
+                      </div>
+                      <Heart className="h-6 w-6 text-rose-500" />
+                    </div>
+                    <blockquote className="text-gray-700 mb-6 text-lg leading-relaxed italic">
+                      "{review.comment}"
+                    </blockquote>
+                    <div className="flex items-center">
+                      <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-full h-12 w-12 flex items-center justify-center text-white font-bold text-lg">
+                        {review.customer_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="ml-4">
+                        <p className="font-semibold text-gray-900 text-lg">{review.customer_name}</p>
+                        <p className="text-sm text-gray-500">Verified Customer</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {reviews.length > 6 && (
+              <div className="text-center mt-12">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="bg-white border-amber-600 text-amber-600 hover:bg-amber-50"
+                  onClick={() => document.getElementById('all-reviews').scrollIntoView({ behavior: 'smooth' })}
+                >
+                  Read More Reviews
+                  <MessageCircle className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Products Section */}
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -271,7 +342,9 @@ const HomePage = () => {
       </section>
 
       {/* Reviews Section */}
-      <ReviewSection reviews={reviews} />
+      <div id="all-reviews">
+        <ReviewSection reviews={reviews} />
+      </div>
 
       {/* Cart Sidebar */}
       <Cart

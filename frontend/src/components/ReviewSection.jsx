@@ -5,6 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Star, Heart, MessageCircle, Send } from 'lucide-react';
+import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API = `${API_BASE}/api`;
 
 const ReviewSection = ({ reviews }) => {
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -36,8 +40,15 @@ const ReviewSection = ({ reviews }) => {
     setIsSubmitting(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Submit review to backend API
+      const reviewData = {
+        customer_name: newReview.customer_name,
+        customer_email: newReview.customer_email || null,
+        rating: newReview.rating,
+        comment: newReview.comment
+      };
+
+      await axios.post(`${API}/reviews`, reviewData);
 
       // Reset form
       setNewReview({
