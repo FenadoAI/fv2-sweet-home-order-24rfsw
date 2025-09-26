@@ -18,10 +18,59 @@ from ai_agents.agents import AgentConfig, SearchAgent, ChatAgent
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# MongoDB with fallback
+try:
+    mongo_url = os.environ['MONGO_URL']
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[os.environ['DB_NAME']]
+    # Test connection
+    async def test_db():
+        try:
+            await client.admin.command('ismaster')
+            return True
+        except:
+            return False
+    db_available = True
+except Exception as e:
+    print(f"Warning: MongoDB connection failed: {e}")
+    print("Using mock database for development")
+    client = None
+    db = None
+    db_available = False
+
+# Mock database for development
+mock_reviews = [
+    {
+        "id": "review_001",
+        "customer_name": "Sarah Johnson",
+        "customer_email": "sarah@example.com",
+        "rating": 5,
+        "comment": "Amazing cookies! My family loved them.",
+        "approved": False,
+        "created_at": datetime.utcnow()
+    },
+    {
+        "id": "review_002",
+        "customer_name": "Mike Chen",
+        "customer_email": "mike@example.com",
+        "rating": 4,
+        "comment": "Great cakes, delivery was fast!",
+        "approved": True,
+        "created_at": datetime.utcnow()
+    },
+    {
+        "id": "review_003",
+        "customer_name": "Emma Davis",
+        "customer_email": "emma@example.com",
+        "rating": 5,
+        "comment": "Best bakery in town! The cupcakes are perfect.",
+        "approved": False,
+        "created_at": datetime.utcnow()
+    }
+]
+mock_products = []
+mock_orders = []
+mock_status_checks = []
 
 # AI agents init
 agent_config = AgentConfig()
@@ -297,70 +346,130 @@ async def update_order_status(order_id: str, status: str):
 async def create_review(review: ReviewCreate):
     review_dict = review.dict()
     review_obj = Review(**review_dict)
-    await db.reviews.insert_one(review_obj.dict())
+
+    if db_available and db:
+        await db.reviews.insert_one(review_obj.dict())
+    else:
+        # Use mock database
+        mock_reviews.append(review_obj.dict())
+
     return review_obj
 
 
 @api_router.get("/reviews", response_model=List[Review])
 async def get_reviews(approved_only: bool = True, product_id: Optional[str] = None):
-    query = {}
-    if approved_only:
-        query["approved"] = True
-    if product_id:
-        query["product_id"] = product_id
+    if db_available and db:
+        query = {}
+        if approved_only:
+            query["approved"] = True
+        if product_id:
+            query["product_id"] = product_id
 
-    reviews = await db.reviews.find(query).sort("created_at", -1).to_list(1000)
-    return [Review(**review) for review in reviews]
+        reviews = await db.reviews.find(query).sort("created_at", -1).to_list(1000)
+        return [Review(**review) for review in reviews]
+    else:
+        # Use mock database
+        filtered_reviews = mock_reviews.copy()
+
+        if approved_only:
+            filtered_reviews = [r for r in filtered_reviews if r.get("approved", False)]
+        if product_id:
+            filtered_reviews = [r for r in filtered_reviews if r.get("product_id") == product_id]
+
+        # Sort by created_at descending
+        filtered_reviews.sort(key=lambda x: x.get("created_at", datetime.utcnow()), reverse=True)
+        return [Review(**review) for review in filtered_reviews]
 
 
 @api_router.get("/reviews/{review_id}", response_model=Review)
 async def get_review(review_id: str):
-    review = await db.reviews.find_one({"id": review_id})
-    if not review:
-        raise HTTPException(status_code=404, detail="Review not found")
-    return Review(**review)
+    if db_available and db:
+        review = await db.reviews.find_one({"id": review_id})
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        return Review(**review)
+    else:
+        # Use mock database
+        review = next((r for r in mock_reviews if r.get("id") == review_id), None)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        return Review(**review)
 
 
 @api_router.put("/reviews/{review_id}/approve", response_model=Review)
 async def approve_review(review_id: str, review_update: ReviewUpdate):
-    result = await db.reviews.update_one(
-        {"id": review_id},
-        {"$set": {"approved": review_update.approved}}
-    )
+    if db_available and db:
+        result = await db.reviews.update_one(
+            {"id": review_id},
+            {"$set": {"approved": review_update.approved}}
+        )
 
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Review not found")
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Review not found")
 
-    updated_review = await db.reviews.find_one({"id": review_id})
-    return Review(**updated_review)
+        updated_review = await db.reviews.find_one({"id": review_id})
+        return Review(**updated_review)
+    else:
+        # Use mock database
+        review = next((r for r in mock_reviews if r.get("id") == review_id), None)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+
+        # Update the review in mock database
+        review["approved"] = review_update.approved
+        return Review(**review)
 
 
 @api_router.delete("/reviews/{review_id}")
 async def delete_review(review_id: str):
-    result = await db.reviews.delete_one({"id": review_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Review not found")
-    return {"message": "Review deleted successfully"}
+    if db_available and db:
+        result = await db.reviews.delete_one({"id": review_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Review not found")
+        return {"message": "Review deleted successfully"}
+    else:
+        # Use mock database
+        review_index = next((i for i, r in enumerate(mock_reviews) if r.get("id") == review_id), None)
+        if review_index is None:
+            raise HTTPException(status_code=404, detail="Review not found")
+
+        mock_reviews.pop(review_index)
+        return {"message": "Review deleted successfully"}
 
 
 # Analytics routes
 @api_router.get("/analytics/dashboard")
 async def get_dashboard_analytics():
-    # Get counts
-    total_products = await db.products.count_documents({})
-    available_products = await db.products.count_documents({"available": True})
-    total_orders = await db.orders.count_documents({})
-    pending_orders = await db.orders.count_documents({"status": "pending"})
-    total_reviews = await db.reviews.count_documents({})
-    approved_reviews = await db.reviews.count_documents({"approved": True})
+    if db_available and db:
+        # Get counts
+        total_products = await db.products.count_documents({})
+        available_products = await db.products.count_documents({"available": True})
+        total_orders = await db.orders.count_documents({})
+        pending_orders = await db.orders.count_documents({"status": "pending"})
+        total_reviews = await db.reviews.count_documents({})
+        approved_reviews = await db.reviews.count_documents({"approved": True})
 
-    # Get recent orders
-    recent_orders = await db.orders.find().sort("order_date", -1).limit(5).to_list(5)
-    recent_orders_data = [Order(**order) for order in recent_orders]
+        # Get recent orders
+        recent_orders = await db.orders.find().sort("order_date", -1).limit(5).to_list(5)
+        recent_orders_data = [Order(**order) for order in recent_orders]
 
-    # Get pending reviews
-    pending_reviews = await db.reviews.find({"approved": False}).sort("created_at", -1).limit(10).to_list(10)
-    pending_reviews_data = [Review(**review) for review in pending_reviews]
+        # Get pending reviews
+        pending_reviews = await db.reviews.find({"approved": False}).sort("created_at", -1).limit(10).to_list(10)
+        pending_reviews_data = [Review(**review) for review in pending_reviews]
+    else:
+        # Use mock database
+        total_products = len(mock_products)
+        available_products = len([p for p in mock_products if p.get("available", True)])
+        total_orders = len(mock_orders)
+        pending_orders = len([o for o in mock_orders if o.get("status") == "pending"])
+        total_reviews = len(mock_reviews)
+        approved_reviews = len([r for r in mock_reviews if r.get("approved", False)])
+
+        # Recent orders (empty for mock)
+        recent_orders_data = []
+
+        # Pending reviews
+        pending_reviews_data = [Review(**r) for r in mock_reviews if not r.get("approved", False)]
 
     return {
         "products": {
@@ -516,12 +625,13 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     # Cleanup on shutdown
-    global search_agent, chat_agent
-    
+    global search_agent, chat_agent, client
+
     # Close MCP
     if search_agent and search_agent.mcp_client:
         # MCP cleanup automatic
         pass
-    
-    client.close()
+
+    if client:
+        client.close()
     logger.info("AI Agents API shutdown complete.")
